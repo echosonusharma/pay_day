@@ -16,7 +16,6 @@ Templates + random slots (no LLM), then keep a row only if Pennywise regexes ext
 uv run python generate_synth.py --n 5000 --out raw_data/synth_msg_5k.ndjson
 ```
 
-
 ## Things used
 
 - [sms-export](https://f-droid.org/en/packages/com.github.tmo1.sms_ie/) extract local msg to for data seed.

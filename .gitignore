@@ -1,6 +1,5 @@
 raw_data/messages.ndjson
-raw_data/synth_5k.ndjson
-raw_data/synth_msg_5k.ndjson
+raw_data/synth*
 
 # uv / venv
 .venv/
