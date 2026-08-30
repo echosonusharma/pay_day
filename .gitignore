@@ -1,0 +1,23 @@
+raw_data/messages.ndjson
+raw_data/synth_5k.ndjson
+raw_data/synth_msg_5k.ndjson
+
+# uv / venv
+.venv/
+.python-version
+
+# python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+dist/
+build/
+*.log
+
+# env / secrets
+.env
+.env.*
+!.env.example
