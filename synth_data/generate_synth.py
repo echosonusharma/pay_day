@@ -13,7 +13,7 @@ import string
 from collections import Counter
 from pathlib import Path
 
-from synth_templates import AMOUNT_RANGE, LOCALES, PREFIXES, TEMPLATES, Locale, Template
+from synth_data.synth_templates import AMOUNT_RANGE, LOCALES, PREFIXES, TEMPLATES, Locale, Template
 
 ROOT = Path(__file__).resolve().parent
 PENNYWISE_PATH = ROOT / "raw_data" / "pennywise_regex.json"

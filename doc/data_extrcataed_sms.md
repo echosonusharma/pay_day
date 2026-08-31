@@ -179,6 +179,33 @@ and nl=null
 
 ---
 
+## Dataset generation guide
+
+- ndjson/jsonl file
+
+- fields
+  - sequence - msg body
+  - class_label - financial/non_financial
+  - source - source of the msg (external dataset / synthetic data)
+  - syn_or_real - 0/1
+  - uuid - unique id for each
+  - extracted_json - expected json data
+  - extracted_condensed - expected data in yml like condensed format
+  - char_len - sequence char len
+  - word_count - sequence word len
+  - expected_data_detail_level - enum(very_detailed, detailed, minimal, null)
+
+what mode fields can we add ?
+
+- processing pipeline.
+
+- synth data (all positive) + ham & spam dataset (all negative) - mix and dataset. 80/20 split for
+training & testing. (initial)
+- use zen api muse spark or a similarly capable model with prompt & data to build the data in condensed format (use local parser to build json). build a good prompt template and llm output checker.
+- check the out & build the fields and then push dataset file with all values
+
+---
+
 ## Test model performance
 
 - Benchmarks, Evaluations ...etc
