@@ -15,7 +15,7 @@ from pathlib import Path
 
 from synth_data.synth_templates import AMOUNT_RANGE, LOCALES, PREFIXES, TEMPLATES, Locale, Template
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 PENNYWISE_PATH = ROOT / "raw_data" / "pennywise_regex.json"
 DEFAULT_OUT = ROOT / "raw_data" / "synth_msg_5k.ndjson"
 
@@ -138,6 +138,27 @@ def random_dates(rng: random.Random) -> dict[str, str]:
     }
 
 
+EXPENSE_KEYWORDS: dict[str, str] = {
+    "sweets": "food", "cafe": "food", "zomato": "food", "swiggy": "food", "restaurant": "food", "diner": "food", "hotel": "food", "java house": "food", "kirana": "groceries", "grocery": "groceries", "supermarket": "groceries", "mini market": "groceries", "panda": "groceries", "carrefour": "groceries", "lulu": "groceries", "spinneys": "groceries", "walmart": "groceries",
+    "uber": "travel", "careem": "travel", "irctc": "travel", "travel": "travel",
+    "fuel": "fuel", "petrol": "fuel", "adnoc": "fuel", "pso": "fuel", "gas station": "fuel", "fuel station": "fuel",
+    "amazon": "shopping", "flipkart": "shopping", "walmart": "shopping", "target": "shopping", "costco": "shopping", "daraz": "shopping", "noon": "shopping", "trendyol": "shopping", "wildberries": "shopping", "ozon": "shopping", "alza": "shopping",
+    "electricity": "bills", "recharge": "bills", "bharat": "bills", "dstv": "bills", "ooredoo": "bills",
+    "pharmacy": "health", "medical": "health", "lekarn": "health", "apteka": "health", "health": "health",
+    "cinema": "entertainment", "entertainment": "entertainment",
+}
+
+
+def infer_expense_type(merchant: str, fallback: str) -> str:
+    if fallback != "unknown":
+        return fallback
+    low = merchant.lower()
+    for kw, cat in EXPENSE_KEYWORDS.items():
+        if kw in low:
+            return cat
+    return "unknown"
+
+
 def make_slots(rng: random.Random, tmpl: Template) -> dict[str, str]:
     locale = LOCALES.get(tmpl.country, LOCALES["United States"])
     lo, hi = AMOUNT_RANGE.get(tmpl.currency, (10.0, 5_000.0))
@@ -169,6 +190,10 @@ def generate_one(rng: random.Random, tmpl: Template, compiled: Compiled) -> dict
     body = tmpl.body.format(**slots)
     hits = extract_hits(body, compiled)
     ref = slots["rrn10"] if "{rrn10}" in tmpl.body else slots["rrn"]
+    expense_type = infer_expense_type(slots["merchant"], tmpl.expense_type)
+    # atm -> cash overrides even if template says unknown (safety)
+    if tmpl.txn_type == "atm" and expense_type == "unknown":
+        expense_type = "cash"
     labels = {
         "txn_type": tmpl.txn_type,
         "amount": slots["amount"],
@@ -178,9 +203,53 @@ def generate_one(rng: random.Random, tmpl: Template, compiled: Compiled) -> dict
         "reference": ref,
         "balance": slots["balance"],
         "date": slots["date_dmy"],
+        "expense_type": expense_type,
     }
     if not labels_ok(labels, hits, tmpl.required):
         return None
+    # canonical extracted_json for v2 dataset
+    direction = "credit" if tmpl.txn_type == "credit" else "debit" if tmpl.txn_type in ("debit", "atm") else None
+    # atm is debit + cash; keep direction debit per schema
+    if tmpl.txn_type == "atm":
+        direction = "debit"
+    txn_kind_map = {"debit": "transfer", "credit": "transfer", "atm": "atm"}
+    # infer txn_kind from template body hints
+    body_low = body.lower()
+    if "upi" in body_low or "vpa" in body_low:
+        txn_kind = "upi"
+    elif "card" in body_low or "pos" in body_low or "spent" in body_low:
+        txn_kind = "card"
+    elif "atm" in body_low or "withdrawn" in body_low or "withdrawal" in body_low:
+        txn_kind = "atm"
+    elif "neft" in body_low or "rtgs" in body_low:
+        txn_kind = "neft"
+    elif "imps" in body_low:
+        txn_kind = "imps"
+    elif any(w in body_low for w in ("m-pesa", "mpesa", "bkash", "tigo", "opay", "wallet", "telebirr")):
+        txn_kind = "wallet"
+    else:
+        txn_kind = txn_kind_map.get(tmpl.txn_type, "other")
+    instrument = "wallet" if txn_kind == "wallet" else "card" if txn_kind == "card" else "account"
+    # txn_date ISO
+    try:
+        d, m, y = slots["date_dmy"].split("-")
+        txn_date = f"20{y}-{m}-{d}"
+    except Exception:
+        txn_date = None
+    extracted_json = {
+        "amount": slots["amount"].replace(",", "."),
+        "currency": tmpl.currency,
+        "direction": direction,
+        "txn_kind": txn_kind,
+        "expense_type": expense_type,
+        "status": "posted",
+        "account_last4": slots["last4"],
+        "instrument": instrument,
+        "counterparty": slots["merchant"],
+        "reference": ref,
+        "balance": slots["balance"].replace(",", "."),
+        "txn_date": txn_date,
+    }
     return {
         "bank": tmpl.bank,
         "country": tmpl.country,
@@ -191,6 +260,8 @@ def generate_one(rng: random.Random, tmpl: Template, compiled: Compiled) -> dict
         "body": body,
         "labels": labels,
         "regex_hits": hits,
+        "expense_type": expense_type,
+        "extracted_json": extracted_json,
     }
 
 
